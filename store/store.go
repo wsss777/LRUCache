@@ -24,10 +24,10 @@ const (
 )
 
 type Options struct {
-	MaxBytes        int64  //lru
-	BucketCount     uint16 //lru2
-	CapPerBucket    uint16 //lru2
-	Level2Cap       uint16 //lru2,二级缓存的容量
+	MaxBytes        int64  // 最大的缓存字节数（lru）
+	BucketCount     uint16 // 缓存的桶数量（lru-2）
+	CapPerBucket    uint16 // 每个桶的容量（lru-2）
+	Level2Cap       uint16 // lru-2 中二级缓存的容量（lru-2）
 	CleanupInterval time.Duration
 	OnEvicted       func(key string, value Value)
 }

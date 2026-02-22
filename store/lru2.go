@@ -23,13 +23,13 @@ type lru2Store struct {
 type node struct {
 	k        string
 	v        Value
-	expireAt int64
+	expireAt int64 // 过期时间戳，expireAt = 0 表示已删除
 }
 type cache struct {
-	dlnk [][2]uint16
-	m    []node
-	hmap map[string]uint16
-	last uint16
+	dlnk [][2]uint16       // 双向链表，0 表示前驱，1 表示后继
+	m    []node            // 预分配内存存储节点
+	hmap map[string]uint16 // 键到节点索引的映射
+	last uint16            // 最后一个节点元素的索引
 }
 
 func newLRU2Cache(opts Options) *lru2Store {
