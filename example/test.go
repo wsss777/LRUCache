@@ -11,6 +11,8 @@ import (
 	"time"
 
 	lcache "github.com/wsss777/LRUCache"
+	"github.com/wsss777/LRUCache/cache"
+	"github.com/wsss777/LRUCache/cluster"
 )
 
 func main() {
@@ -32,13 +34,13 @@ func main() {
 	}
 
 	// 创建节点选择器
-	picker, err := lcache.NewClientPicker(addr)
+	picker, err := cluster.NewClientPicker(addr)
 	if err != nil {
 		log.Fatal("创建节点选择器失败:", err)
 	}
 
 	// 创建缓存组
-	group := lcache.NewGroup("test", 2<<20, lcache.GetterFunc(
+	group := cache.NewGroup("test", 2<<20, cache.GetterFunc(
 		func(ctx context.Context, key string) ([]byte, error) {
 			log.Printf("[节点%s] 触发数据源加载: key=%s", *nodeID, key)
 			return []byte(fmt.Sprintf("节点%s的数据源值", *nodeID)), nil
