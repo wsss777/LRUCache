@@ -326,8 +326,8 @@ func (g *Group) getFromPeer(ctx context.Context, peer cluster.Peer, key string) 
 
 // RegisterPeers 注册PeerPicker
 func (g *Group) RegisterPeers(peers cluster.PeerPicker) {
-	if g.peers == nil {
-		panic("REgisterPeers called more than once")
+	if g.peers != nil {
+		panic("RegisterPeers called more than once")
 	}
 	g.peers = peers
 	logger.L().Info("Group RegisterPeers",

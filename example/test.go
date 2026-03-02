@@ -25,7 +25,7 @@ func main() {
 	log.Printf("[节点%s] 启动，地址: %s", *nodeID, addr)
 
 	// 创建节点
-	node, err := lcache.NewServer(addr, "kama-cache",
+	node, err := lcache.NewServer(addr, "ws-cache",
 		lcache.WithEtcdEndpoints([]string{"localhost:2379"}),
 		lcache.WithDialTimeout(30*time.Second),
 	)
