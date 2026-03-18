@@ -115,7 +115,7 @@ func NewGroup(name string, cacheBytes int64, getter Getter, opts ...GroupOption)
 	defer groupsMu.Unlock()
 
 	if _, exists := groups[name]; exists {
-		logger.L().Warn("Group with name already exists , willed be replaced",
+		logger.L().Warn("Group with name already exists , will be replaced",
 			zap.String("name", name))
 	}
 	groups[name] = g
@@ -158,6 +158,7 @@ func (g *Group) Get(ctx context.Context, key string) (ByteView, error) {
 
 // Set 设置缓存值
 func (g *Group) Set(ctx context.Context, key string, value []byte) error {
+	//log.Printf("[DEBUG-EXP] Set key=%q | 当前 expiration = %v | 是否 >0: %v", key, g.expiration, g.expiration > 0)
 	// 检查组是否已关闭
 	if atomic.LoadInt32(&g.closed) == 1 {
 		return ErrGroupClosed
@@ -258,7 +259,7 @@ func (g *Group) Close() error {
 	groupsMu.Lock()
 	delete(groups, g.name)
 	groupsMu.Unlock()
-	logger.L().Info("Group Clear cache",
+	logger.L().Info("Group closed",
 		zap.String("name", g.name))
 	return nil
 }
@@ -294,7 +295,7 @@ func (g *Group) loadData(ctx context.Context, key string) (value ByteView, err e
 	// 尝试从远程节点获取
 	if g.peers != nil {
 		peer, ok, isSelf := g.peers.PickPeer(key)
-		if ok || !isSelf {
+		if ok && !isSelf {
 			value, err := g.getFromPeer(ctx, peer, key)
 			if err == nil {
 				atomic.AddInt64(&g.stats.peerHits, 1)
@@ -302,7 +303,7 @@ func (g *Group) loadData(ctx context.Context, key string) (value ByteView, err e
 			}
 
 			atomic.AddInt64(&g.stats.peerMisses, 1)
-			logger.L().Error("failed to get from peer",
+			logger.L().Error("failed to get data",
 				zap.Error(err))
 		}
 	}
@@ -317,7 +318,7 @@ func (g *Group) loadData(ctx context.Context, key string) (value ByteView, err e
 
 // getFromPeer 从其他节点获取数据
 func (g *Group) getFromPeer(ctx context.Context, peer cluster.Peer, key string) (ByteView, error) {
-	bytes, err := g.getter.Get(ctx, key)
+	bytes, err := peer.Get(g.name, key)
 	if err != nil {
 		return ByteView{}, fmt.Errorf("failed to get from peer : %w", err)
 	}

@@ -18,8 +18,8 @@ type Config struct {
 }
 
 // DefaultConfig 提供默认配置
-var DefaultConfig = Config{
-	Endpoints:   []string{"127.0.0.1:2379"},
+var DefaultConfig = &Config{
+	Endpoints:   []string{"localhost:2379"},
 	DialTimeout: 5 * time.Second,
 }
 
@@ -50,7 +50,7 @@ func Register(svcName string, address string, stopCh <-chan error) error {
 		return fmt.Errorf("failed to create etcd lease: %v", err)
 	}
 	// 注册服务，使用完整的key路径
-	key := fmt.Sprintf("/service/%s/%s", svcName, address)
+	key := fmt.Sprintf("/services/%s/%s", svcName, address)
 	_, err = cli.Put(context.Background(), key, address, clientv3.WithLease(lease.ID))
 	if err != nil {
 		cli.Close()
@@ -115,6 +115,13 @@ func getLocalIP() (string, error) {
 			if ip[0] == 169 && ip[1] == 254 {
 				continue
 			}
+			if ip[0] == 172 && ip[1] == 20 {
+				continue
+			}
+			if ip[0] == 192 && ip[1] == 168 {
+				continue
+			}
+
 			return ip.String(), nil
 		}
 	}

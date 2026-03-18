@@ -73,10 +73,6 @@ func (s *lru2Store) Get(key string) (Value, bool) {
 	//一级缓存
 	n1, status1, expireAt := s.caches[idx][0].del(key)
 	if status1 > 0 {
-		if n1 == nil { // 防御性检查，虽然当前实现不会发生
-			s.delete(key, idx)
-			return nil, false
-		}
 		if expireAt > 0 && currentTime >= expireAt {
 			s.delete(key, idx)
 			fmt.Println("找到项目已经过期，删除它")
@@ -103,14 +99,13 @@ func (s *lru2Store) Get(key string) (Value, bool) {
 }
 
 func (s *lru2Store) Set(key string, value Value) error {
-	return s.SetWithExpiration(key, value, 1e7)
+	return s.SetWithExpiration(key, value, 365*24*time.Hour)
 }
 
 func (s *lru2Store) SetWithExpiration(key string, value Value, expiration time.Duration) error {
 	expireAt := int64(0)
 	if expiration > 0 {
 		expireAt = Now() + int64(expiration.Nanoseconds())
-
 	}
 	idx := hashBKRD(key) & s.mask
 	s.locks[idx].Lock()
@@ -296,6 +291,7 @@ func (c *cache) del(key string) (*node, int, int64) {
 	}
 
 	return nil, 0, 0
+
 }
 
 // 遍历缓存中的所有有效项

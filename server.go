@@ -171,11 +171,11 @@ func (s *Server) Set(ctx context.Context, req *pb.Request) (*pb.ResponseForGet, 
 		return nil, fmt.Errorf("group %s not found", req.Group)
 	}
 
-	// 从 context 中获取标记，如果没有则创建新的 context
-	fromPeer := ctx.Value("from_peer")
-	if fromPeer == nil {
-		ctx = context.WithValue(ctx, "from_peer", true)
-	}
+	// // 从 context 中获取标记，如果没有则创建新的 context
+	// fromPeer := ctx.Value("from_peer")
+	// if fromPeer == nil {
+	// 	ctx = context.WithValue(ctx, "from_peer", true)
+	// }
 
 	if err := group.Set(ctx, req.Key, req.Value); err != nil {
 		return nil, err

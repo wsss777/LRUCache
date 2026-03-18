@@ -52,7 +52,7 @@ func init() {
 			cfg = zap.NewDevelopmentConfig()
 			cfg.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
 			cfg.EncoderConfig.EncodeLevel = zapcore.CapitalColorLevelEncoder
-			cfg.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
+			cfg.Level = zap.NewAtomicLevelAt(zap.InfoLevel)
 		}
 
 		//如果设置了 LOG_LEVEL，则尝试覆盖

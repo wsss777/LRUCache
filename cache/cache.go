@@ -78,7 +78,7 @@ func (c *Cache) ensureInitialized() {
 
 		logger.L().Info("cache initialized",
 			zap.String("type", string(c.opts.CacheType)),
-			zap.Int64("max_byes", c.opts.MaxBytes))
+			zap.Int64("max_bytes", c.opts.MaxBytes))
 
 	}
 }
@@ -131,9 +131,12 @@ func (c *Cache) Get(ctx context.Context, key string) (value ByteView, ok bool) {
 
 // AddWithExpiration 向缓存中添加一个带过期时间的 key-value 对
 func (c *Cache) AddWithExpiration(key string, value ByteView, expirationTime time.Time) {
-	if atomic.LoadInt32(&c.closed) == 1 || atomic.LoadInt32(&c.initialized) == 0 {
+	if atomic.LoadInt32(&c.closed) == 1 {
+		logger.L().Warn("attempt to add to a closed cache ",
+			zap.String("key", key))
 		return
 	}
+
 	c.ensureInitialized()
 	expiration := time.Until(expirationTime)
 	if expiration <= 0 {
@@ -143,7 +146,8 @@ func (c *Cache) AddWithExpiration(key string, value ByteView, expirationTime tim
 	}
 	if err := c.store.SetWithExpiration(key, value, expiration); err != nil {
 		logger.L().Warn("failed to add to a cache with expiration",
-			zap.String("key", key))
+			zap.String("key", key),
+			zap.Error(err))
 	}
 }
 
@@ -165,8 +169,8 @@ func (c *Cache) Clear() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.store.Clear()
-	atomic.StoreInt64(&c.hits, 1)
-	atomic.StoreInt64(&c.misses, 1)
+	atomic.StoreInt64(&c.hits, 0)
+	atomic.StoreInt64(&c.misses, 0)
 }
 
 // Len 返回缓存的当前存储项数量
@@ -214,7 +218,7 @@ func (c *Cache) Stats() map[string]interface{} {
 		if totalRequests > 0 {
 			stats["hit_rate"] = float64(stats["hits"].(int64)) / float64(totalRequests)
 		} else {
-			stats["hit_rate"] = 0
+			stats["hit_rate"] = 0.0
 		}
 
 	}

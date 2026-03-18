@@ -11,7 +11,6 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
-	"google.golang.org/grpc/keepalive"
 )
 
 type Client struct {
@@ -35,19 +34,11 @@ func NewClient(addr string, svcName string, etcdCli *clientv3.Client) (*Client, 
 			return nil, fmt.Errorf("failed to create etcd client error: %v", err)
 		}
 	}
-	//conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()),
-	//	grpc.WithBlock(),
-	//	grpc.WithTimeout(time.Second*10),
-	//	grpc.WithDefaultCallOptions(grpc.WaitForReady(true)),
-	//)
-	conn, err := grpc.NewClient(addr,
+	conn, err := grpc.Dial(addr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithTimeout(10*time.Second), // 超时控制
 		grpc.WithDefaultCallOptions(grpc.WaitForReady(true)),
-		grpc.WithKeepaliveParams(keepalive.ClientParameters{
-			Time:                30 * time.Second, // 每 30s 发一次 ping
-			Timeout:             10 * time.Second,
-			PermitWithoutStream: true, // 空闲时也发 ping
-		}),
 	)
 	if err != nil {
 		return nil, fmt.Errorf("failed to dial server : %v", err)

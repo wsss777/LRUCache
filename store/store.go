@@ -38,7 +38,7 @@ func NewOptions() Options {
 		BucketCount:     16,
 		CapPerBucket:    512,
 		Level2Cap:       256,
-		CleanupInterval: 5 * time.Minute,
+		CleanupInterval: time.Minute,
 		OnEvicted:       nil,
 	}
 }

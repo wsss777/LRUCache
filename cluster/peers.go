@@ -15,7 +15,7 @@ import (
 	"go.uber.org/zap"
 )
 
-const defaultSvcName = "ws-LRU-cache"
+const defaultSvcName = "ws-cache"
 
 // PeerPicker 定义了peer选择器的接口
 type PeerPicker interface {
@@ -174,7 +174,7 @@ func (p *ClientPicker) fetchAllServices() error {
 
 // set 添加服务实例
 func (p *ClientPicker) set(addr string) {
-	if client, err := NewClient(addr, p.svcName, p.etcdCli); err != nil {
+	if client, err := NewClient(addr, p.svcName, p.etcdCli); err == nil {
 		p.consHash.Add(addr)
 		p.clients[addr] = client
 		logger.L().Info("successfully created client ",
@@ -201,6 +201,7 @@ func (p *ClientPicker) PickPeer(key string) (Peer, bool, bool) {
 	defer p.mu.RUnlock()
 	if addr := p.consHash.Get(key); addr != "" {
 		if client, exists := p.clients[addr]; exists {
+
 			return client, true, addr == p.selfAddr
 		}
 	}
