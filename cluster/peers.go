@@ -15,15 +15,20 @@ import (
 	"go.uber.org/zap"
 )
 
-const defaultSvcName = "ws-cache"
+const (
+	defaultSvcName         = "ws-cache"
+	defaultMigrationWindow = 10 * time.Minute
+)
 
-// PeerPicker 定义了peer选择器的接口
 type PeerPicker interface {
 	PickPeer(key string) (peer Peer, ok bool, self bool)
 	Close() error
 }
 
-// Peer 定义了缓存节点的接口
+type PeerBroadcaster interface {
+	AllPeers() []Peer
+}
+
 type Peer interface {
 	Get(group string, key string) ([]byte, error)
 	Set(ctx context.Context, group string, key string, value []byte) error
@@ -31,53 +36,88 @@ type Peer interface {
 	Close() error
 }
 
-// ClientPicker 实现了PeerPicker接口
-type ClientPicker struct {
-	selfAddr string
-	svcName  string
-	mu       sync.RWMutex
-	consHash *consistentHash.Map
-	clients  map[string]*Client
-	etcdCli  *clientv3.Client
-	ctx      context.Context
-	cancel   context.CancelFunc
+type MigrationPeer interface {
+	Peer
+	GetLocalEntry(group, key string) ([]byte, time.Time, error)
+	SetWithExpireAt(ctx context.Context, group, key string, value []byte, expireAt time.Time) error
 }
 
-// PickerOption 定义配置选项
+type MigrationAwarePicker interface {
+	PeerPicker
+	PickPreviousPeer(key string) (peer Peer, ok bool, self bool)
+	CurrentOwner(key string) string
+	PreviousOwner(key string) string
+	SelfAddress() string
+	RegisterTopologyChangeListener(listener func())
+}
+
+type ClientPicker struct {
+	selfAddr        string
+	svcName         string
+	mu              sync.RWMutex
+	consHash        *consistentHash.Map
+	prevHash        *consistentHash.Map
+	clients         map[string]*Client
+	etcdCli         *clientv3.Client
+	ctx             context.Context
+	cancel          context.CancelFunc
+	migrationWindow time.Duration
+	migrationUntil  time.Time
+	listeners       []func()
+}
+
 type PickerOption func(*ClientPicker)
 
-// WithServiceName 设置服务名称
 func WithServiceName(name string) PickerOption {
 	return func(p *ClientPicker) {
 		p.svcName = name
 	}
 }
 
-// PrintPeers 打印当前已发现的节点（调试用）
+func WithMigrationWindow(window time.Duration) PickerOption {
+	return func(p *ClientPicker) {
+		if window > 0 {
+			p.migrationWindow = window
+		}
+	}
+}
+
 func (p *ClientPicker) PrintPeers() {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 
-	log.Printf("当前已发现的节点:")
+	log.Printf("current discovered peers:")
+	log.Printf("- self: %s", p.selfAddr)
 	for addr := range p.clients {
 		log.Printf("- %s", addr)
 	}
 }
 
-// NewClientPicker 创建新的ClientPicker实例
 func NewClientPicker(addr string, opts ...PickerOption) (*ClientPicker, error) {
+	selfAddr, err := registry.NormalizeAddress(addr)
+	if err != nil {
+		return nil, fmt.Errorf("failed to normalize self address: %v", err)
+	}
+
 	ctx, cancel := context.WithCancel(context.Background())
 	picker := &ClientPicker{
-		selfAddr: addr,
-		svcName:  defaultSvcName,
-		clients:  make(map[string]*Client),
-		consHash: consistentHash.New(),
-		ctx:      ctx,
-		cancel:   cancel,
+		selfAddr:        selfAddr,
+		svcName:         defaultSvcName,
+		clients:         make(map[string]*Client),
+		consHash:        consistentHash.New(),
+		ctx:             ctx,
+		cancel:          cancel,
+		migrationWindow: defaultMigrationWindow,
 	}
 	for _, opt := range opts {
 		opt(picker)
 	}
+
+	if err := picker.consHash.Add(selfAddr); err != nil {
+		cancel()
+		return nil, fmt.Errorf("failed to add self into consistent hash: %v", err)
+	}
+
 	cli, err := clientv3.New(clientv3.Config{
 		Endpoints:   registry.DefaultConfig.Endpoints,
 		DialTimeout: registry.DefaultConfig.DialTimeout,
@@ -96,75 +136,82 @@ func NewClientPicker(addr string, opts ...PickerOption) (*ClientPicker, error) {
 	return picker, nil
 }
 
-// startServiceDiscovery 启动服务发现
+func (p *ClientPicker) RegisterTopologyChangeListener(listener func()) {
+	if listener == nil {
+		return
+	}
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	p.listeners = append(p.listeners, listener)
+}
+
+func (p *ClientPicker) SelfAddress() string {
+	return p.selfAddr
+}
+
 func (p *ClientPicker) startServiceDiscovery() error {
-	// 先进行全量更新
 	if err := p.fetchAllServices(); err != nil {
 		return err
 	}
-	//启动增量式更新
 	go p.watchServiceChanges()
 	return nil
 }
 
-// watchServiceChanges 监听服务实例变化
 func (p *ClientPicker) watchServiceChanges() {
 	watcher := clientv3.NewWatcher(p.etcdCli)
+	defer watcher.Close()
+
 	watchChan := watcher.Watch(p.ctx, "/services/"+p.svcName, clientv3.WithPrefix())
 	for {
 		select {
 		case <-p.ctx.Done():
-			watcher.Close()
 			return
-		case resp := <-watchChan:
+		case resp, ok := <-watchChan:
+			if !ok {
+				return
+			}
 			p.handleWatchEvents(resp.Events)
 		}
 	}
 }
 
-// handleWatchEvents 处理监听到的事件
 func (p *ClientPicker) handleWatchEvents(events []*clientv3.Event) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
 	for _, event := range events {
-		addr := string(event.Kv.Value)
-		if addr == p.selfAddr {
+		addr := p.addrFromEvent(event)
+		if addr == "" || addr == p.selfAddr {
 			continue
 		}
+
 		switch event.Type {
 		case clientv3.EventTypePut:
-			if _, exists := p.clients[addr]; !exists {
-				p.set(addr)
+			if p.set(addr, true) {
 				logger.L().Info("New service discovered",
 					zap.String("addr", addr))
 			}
 		case clientv3.EventTypeDelete:
-			if client, exists := p.clients[addr]; exists {
-				client.Close()
-				p.remove(addr)
+			if p.remove(addr, true) {
 				logger.L().Info("Removed service discovered",
 					zap.String("addr", addr))
 			}
 		}
-
 	}
 }
 
-// fetchAllServices 获取所有服务实例
 func (p *ClientPicker) fetchAllServices() error {
 	ctx, cancel := context.WithTimeout(p.ctx, 3*time.Second)
 	defer cancel()
+
 	resp, err := p.etcdCli.Get(ctx, "/services/"+p.svcName, clientv3.WithPrefix())
 	if err != nil {
 		return fmt.Errorf("failed to get all services from etcd: %v", err)
-
 	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
+
 	for _, kv := range resp.Kvs {
 		addr := string(kv.Value)
-		if addr != "" && addr != p.selfAddr {
-			p.set(addr)
+		if addr == "" || addr == p.selfAddr {
+			continue
+		}
+		if p.set(addr, false) {
 			logger.L().Info("New service discovered",
 				zap.String("addr", addr))
 		}
@@ -172,43 +219,160 @@ func (p *ClientPicker) fetchAllServices() error {
 	return nil
 }
 
-// set 添加服务实例
-func (p *ClientPicker) set(addr string) {
-	if client, err := NewClient(addr, p.svcName, p.etcdCli); err == nil {
-		p.consHash.Add(addr)
-		p.clients[addr] = client
-		logger.L().Info("successfully created client ",
-			zap.String("addr", addr))
+func (p *ClientPicker) set(addr string, notify bool) bool {
+	if addr == "" || addr == p.selfAddr {
+		return false
+	}
 
-	} else {
+	p.mu.Lock()
+	if _, exists := p.clients[addr]; exists {
+		p.mu.Unlock()
+		return false
+	}
+	prevSnapshot := p.consHash.Clone()
+	p.mu.Unlock()
 
+	client, err := NewClient(addr, p.svcName, p.etcdCli)
+	if err != nil {
 		logger.L().Error("failed to create client",
 			zap.String("addr", addr),
 			zap.Error(err),
 		)
+		return false
 	}
+
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if _, exists := p.clients[addr]; exists {
+		client.Close()
+		return false
+	}
+	if err := p.consHash.Add(addr); err != nil {
+		client.Close()
+		logger.L().Error("failed to add peer into consistent hash",
+			zap.String("addr", addr),
+			zap.Error(err),
+		)
+		return false
+	}
+
+	p.clients[addr] = client
+	p.activatePreviousRingLocked(prevSnapshot, notify)
+	logger.L().Info("successfully created client",
+		zap.String("addr", addr))
+	return true
 }
 
-// remove 移除服务实例
-func (p *ClientPicker) remove(addr string) {
-	p.consHash.Remove(addr)
+func (p *ClientPicker) remove(addr string, notify bool) bool {
+	if addr == "" || addr == p.selfAddr {
+		return false
+	}
+
+	p.mu.Lock()
+	client, exists := p.clients[addr]
+	if !exists {
+		p.mu.Unlock()
+		return false
+	}
+	prevSnapshot := p.consHash.Clone()
 	delete(p.clients, addr)
+	_ = p.consHash.Remove(addr)
+	p.activatePreviousRingLocked(prevSnapshot, notify)
+	p.mu.Unlock()
+
+	client.Close()
+	return true
 }
 
-// PickPeer 选择peer节点
-func (p *ClientPicker) PickPeer(key string) (Peer, bool, bool) {
+func (p *ClientPicker) activatePreviousRingLocked(prev *consistentHash.Map, notify bool) {
+	if !notify || prev == nil {
+		return
+	}
+
+	p.prevHash = prev
+	p.migrationUntil = time.Now().Add(p.migrationWindow)
+	listeners := append([]func(){}, p.listeners...)
+	go func() {
+		for _, listener := range listeners {
+			listener()
+		}
+	}()
+}
+
+func (p *ClientPicker) currentRingLocked() *consistentHash.Map {
+	return p.consHash
+}
+
+func (p *ClientPicker) previousRingLocked() *consistentHash.Map {
+	if p.prevHash == nil || time.Now().After(p.migrationUntil) {
+		return nil
+	}
+	return p.prevHash
+}
+
+func (p *ClientPicker) CurrentOwner(key string) string {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
-	if addr := p.consHash.Get(key); addr != "" {
-		if client, exists := p.clients[addr]; exists {
-
-			return client, true, addr == p.selfAddr
-		}
-	}
-	return nil, false, false
+	return p.currentRingLocked().Get(key)
 }
 
-// Close 关闭所有资源
+func (p *ClientPicker) PreviousOwner(key string) string {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	ring := p.previousRingLocked()
+	if ring == nil {
+		return ""
+	}
+	return ring.Get(key)
+}
+
+func (p *ClientPicker) PickPeer(key string) (Peer, bool, bool) {
+	return p.pickFromRing(key, false)
+}
+
+func (p *ClientPicker) AllPeers() []Peer {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	peers := make([]Peer, 0, len(p.clients))
+	for _, client := range p.clients {
+		peers = append(peers, client)
+	}
+	return peers
+}
+
+func (p *ClientPicker) PickPreviousPeer(key string) (Peer, bool, bool) {
+	return p.pickFromRing(key, true)
+}
+
+func (p *ClientPicker) pickFromRing(key string, previous bool) (Peer, bool, bool) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	var ring *consistentHash.Map
+	if previous {
+		ring = p.previousRingLocked()
+	} else {
+		ring = p.currentRingLocked()
+	}
+	if ring == nil {
+		return nil, false, false
+	}
+
+	addr := ring.Get(key)
+	if addr == "" {
+		return nil, false, false
+	}
+	if addr == p.selfAddr {
+		return nil, true, true
+	}
+	client, exists := p.clients[addr]
+	if !exists {
+		return nil, false, false
+	}
+	return client, true, false
+}
+
 func (p *ClientPicker) Close() error {
 	p.cancel()
 	p.mu.Lock()
@@ -221,8 +385,10 @@ func (p *ClientPicker) Close() error {
 		}
 	}
 
-	if err := p.etcdCli.Close(); err != nil {
-		errs = append(errs, fmt.Errorf("failed to close etcd client: %v", err))
+	if p.etcdCli != nil {
+		if err := p.etcdCli.Close(); err != nil {
+			errs = append(errs, fmt.Errorf("failed to close etcd client: %v", err))
+		}
 	}
 
 	if len(errs) > 0 {
@@ -231,7 +397,16 @@ func (p *ClientPicker) Close() error {
 	return nil
 }
 
-// parseAddrFromKey 从etcd key中解析地址
+func (p *ClientPicker) addrFromEvent(event *clientv3.Event) string {
+	if event == nil || event.Kv == nil {
+		return ""
+	}
+	if addr := string(event.Kv.Value); addr != "" {
+		return addr
+	}
+	return parseAddrFromKey(string(event.Kv.Key), p.svcName)
+}
+
 func parseAddrFromKey(key, svcName string) string {
 	prefix := fmt.Sprintf("/services/%s/", svcName)
 	if strings.HasPrefix(key, prefix) {

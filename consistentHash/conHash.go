@@ -144,6 +144,30 @@ func (m *Map) addNode(node string, replicas int) {
 	m.nodeReplicas[node] = replicas
 }
 
+func (m *Map) Clone() *Map {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	clone := &Map{
+		config:       m.config,
+		keys:         append([]int(nil), m.keys...),
+		hashMap:      make(map[int]string, len(m.hashMap)),
+		nodeReplicas: make(map[string]int, len(m.nodeReplicas)),
+		nodeCounts:   make(map[string]int64, len(m.nodeCounts)),
+	}
+	for k, v := range m.hashMap {
+		clone.hashMap[k] = v
+	}
+	for k, v := range m.nodeReplicas {
+		clone.nodeReplicas[k] = v
+	}
+	for k, v := range m.nodeCounts {
+		clone.nodeCounts[k] = v
+	}
+	clone.totalRequests = atomic.LoadInt64(&m.totalRequests)
+	return clone
+}
+
 // checkAndRebalance 检查并重新平衡虚拟节点
 func (m *Map) checkAndRebalance() {
 	if atomic.LoadInt64(&m.totalRequests) < 1000 {

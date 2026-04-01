@@ -2,9 +2,9 @@
 // versions:
 // - protoc-gen-go-grpc v1.6.1
 // - protoc             v6.33.5
-// source: pb/wscache.proto
+// source: pb/wsCache.proto
 
-package __
+package pb
 
 import (
 	context "context"
@@ -193,5 +193,5 @@ var WsCache_ServiceDesc = grpc.ServiceDesc{
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
-	Metadata: "pb/wscache.proto",
+	Metadata: "pb/wsCache.proto",
 }

@@ -2,9 +2,9 @@
 // versions:
 // 	protoc-gen-go v1.36.11
 // 	protoc        v6.33.5
-// source: pb/wscache.proto
+// source: pb/wsCache.proto
 
-package __
+package pb
 
 import (
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
@@ -22,17 +22,18 @@ const (
 )
 
 type Request struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Group         string                 `protobuf:"bytes,1,opt,name=group,proto3" json:"group,omitempty"`
-	Key           string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
-	Value         []byte                 `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Group            string                 `protobuf:"bytes,1,opt,name=group,proto3" json:"group,omitempty"`
+	Key              string                 `protobuf:"bytes,2,opt,name=key,proto3" json:"key,omitempty"`
+	Value            []byte                 `protobuf:"bytes,3,opt,name=value,proto3" json:"value,omitempty"`
+	ExpireAtUnixNano int64                  `protobuf:"varint,4,opt,name=expire_at_unix_nano,json=expireAtUnixNano,proto3" json:"expire_at_unix_nano,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *Request) Reset() {
 	*x = Request{}
-	mi := &file_pb_wscache_proto_msgTypes[0]
+	mi := &file_pb_wsCache_proto_msgTypes[0]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -44,7 +45,7 @@ func (x *Request) String() string {
 func (*Request) ProtoMessage() {}
 
 func (x *Request) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_wscache_proto_msgTypes[0]
+	mi := &file_pb_wsCache_proto_msgTypes[0]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -57,7 +58,7 @@ func (x *Request) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Request.ProtoReflect.Descriptor instead.
 func (*Request) Descriptor() ([]byte, []int) {
-	return file_pb_wscache_proto_rawDescGZIP(), []int{0}
+	return file_pb_wsCache_proto_rawDescGZIP(), []int{0}
 }
 
 func (x *Request) GetGroup() string {
@@ -81,16 +82,24 @@ func (x *Request) GetValue() []byte {
 	return nil
 }
 
+func (x *Request) GetExpireAtUnixNano() int64 {
+	if x != nil {
+		return x.ExpireAtUnixNano
+	}
+	return 0
+}
+
 type ResponseForGet struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Value         []byte                 `protobuf:"bytes,1,opt,name=value,proto3" json:"value,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	Value            []byte                 `protobuf:"bytes,1,opt,name=value,proto3" json:"value,omitempty"`
+	ExpireAtUnixNano int64                  `protobuf:"varint,2,opt,name=expire_at_unix_nano,json=expireAtUnixNano,proto3" json:"expire_at_unix_nano,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
 }
 
 func (x *ResponseForGet) Reset() {
 	*x = ResponseForGet{}
-	mi := &file_pb_wscache_proto_msgTypes[1]
+	mi := &file_pb_wsCache_proto_msgTypes[1]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -102,7 +111,7 @@ func (x *ResponseForGet) String() string {
 func (*ResponseForGet) ProtoMessage() {}
 
 func (x *ResponseForGet) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_wscache_proto_msgTypes[1]
+	mi := &file_pb_wsCache_proto_msgTypes[1]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -115,7 +124,7 @@ func (x *ResponseForGet) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResponseForGet.ProtoReflect.Descriptor instead.
 func (*ResponseForGet) Descriptor() ([]byte, []int) {
-	return file_pb_wscache_proto_rawDescGZIP(), []int{1}
+	return file_pb_wsCache_proto_rawDescGZIP(), []int{1}
 }
 
 func (x *ResponseForGet) GetValue() []byte {
@@ -123,6 +132,13 @@ func (x *ResponseForGet) GetValue() []byte {
 		return x.Value
 	}
 	return nil
+}
+
+func (x *ResponseForGet) GetExpireAtUnixNano() int64 {
+	if x != nil {
+		return x.ExpireAtUnixNano
+	}
+	return 0
 }
 
 type ResponseForDelete struct {
@@ -134,7 +150,7 @@ type ResponseForDelete struct {
 
 func (x *ResponseForDelete) Reset() {
 	*x = ResponseForDelete{}
-	mi := &file_pb_wscache_proto_msgTypes[2]
+	mi := &file_pb_wsCache_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -146,7 +162,7 @@ func (x *ResponseForDelete) String() string {
 func (*ResponseForDelete) ProtoMessage() {}
 
 func (x *ResponseForDelete) ProtoReflect() protoreflect.Message {
-	mi := &file_pb_wscache_proto_msgTypes[2]
+	mi := &file_pb_wsCache_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -159,7 +175,7 @@ func (x *ResponseForDelete) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResponseForDelete.ProtoReflect.Descriptor instead.
 func (*ResponseForDelete) Descriptor() ([]byte, []int) {
-	return file_pb_wscache_proto_rawDescGZIP(), []int{2}
+	return file_pb_wsCache_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *ResponseForDelete) GetValue() bool {
@@ -169,43 +185,45 @@ func (x *ResponseForDelete) GetValue() bool {
 	return false
 }
 
-var File_pb_wscache_proto protoreflect.FileDescriptor
+var File_pb_wsCache_proto protoreflect.FileDescriptor
 
-const file_pb_wscache_proto_rawDesc = "" +
+const file_pb_wsCache_proto_rawDesc = "" +
 	"\n" +
-	"\x10pb/wscache.proto\x12\x02pb\"G\n" +
+	"\x10pb/wsCache.proto\x12\x02pb\"v\n" +
 	"\aRequest\x12\x14\n" +
 	"\x05group\x18\x01 \x01(\tR\x05group\x12\x10\n" +
 	"\x03key\x18\x02 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x03 \x01(\fR\x05value\"&\n" +
+	"\x05value\x18\x03 \x01(\fR\x05value\x12-\n" +
+	"\x13expire_at_unix_nano\x18\x04 \x01(\x03R\x10expireAtUnixNano\"U\n" +
 	"\x0eResponseForGet\x12\x14\n" +
-	"\x05value\x18\x01 \x01(\fR\x05value\")\n" +
+	"\x05value\x18\x01 \x01(\fR\x05value\x12-\n" +
+	"\x13expire_at_unix_nano\x18\x02 \x01(\x03R\x10expireAtUnixNano\")\n" +
 	"\x11ResponseForDelete\x12\x14\n" +
 	"\x05value\x18\x01 \x01(\bR\x05value2\x87\x01\n" +
 	"\awsCache\x12&\n" +
 	"\x03Get\x12\v.pb.Request\x1a\x12.pb.ResponseForGet\x12&\n" +
 	"\x03Set\x12\v.pb.Request\x1a\x12.pb.ResponseForGet\x12,\n" +
-	"\x06Delete\x12\v.pb.Request\x1a\x15.pb.ResponseForDeleteB\x04Z\x02./b\x06proto3"
+	"\x06Delete\x12\v.pb.Request\x1a\x15.pb.ResponseForDeleteB#Z!github.com/wsss777/LRUCache/pb;pbb\x06proto3"
 
 var (
-	file_pb_wscache_proto_rawDescOnce sync.Once
-	file_pb_wscache_proto_rawDescData []byte
+	file_pb_wsCache_proto_rawDescOnce sync.Once
+	file_pb_wsCache_proto_rawDescData []byte
 )
 
-func file_pb_wscache_proto_rawDescGZIP() []byte {
-	file_pb_wscache_proto_rawDescOnce.Do(func() {
-		file_pb_wscache_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pb_wscache_proto_rawDesc), len(file_pb_wscache_proto_rawDesc)))
+func file_pb_wsCache_proto_rawDescGZIP() []byte {
+	file_pb_wsCache_proto_rawDescOnce.Do(func() {
+		file_pb_wsCache_proto_rawDescData = protoimpl.X.CompressGZIP(unsafe.Slice(unsafe.StringData(file_pb_wsCache_proto_rawDesc), len(file_pb_wsCache_proto_rawDesc)))
 	})
-	return file_pb_wscache_proto_rawDescData
+	return file_pb_wsCache_proto_rawDescData
 }
 
-var file_pb_wscache_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
-var file_pb_wscache_proto_goTypes = []any{
+var file_pb_wsCache_proto_msgTypes = make([]protoimpl.MessageInfo, 3)
+var file_pb_wsCache_proto_goTypes = []any{
 	(*Request)(nil),           // 0: pb.Request
 	(*ResponseForGet)(nil),    // 1: pb.ResponseForGet
 	(*ResponseForDelete)(nil), // 2: pb.ResponseForDelete
 }
-var file_pb_wscache_proto_depIdxs = []int32{
+var file_pb_wsCache_proto_depIdxs = []int32{
 	0, // 0: pb.wsCache.Get:input_type -> pb.Request
 	0, // 1: pb.wsCache.Set:input_type -> pb.Request
 	0, // 2: pb.wsCache.Delete:input_type -> pb.Request
@@ -219,26 +237,26 @@ var file_pb_wscache_proto_depIdxs = []int32{
 	0, // [0:0] is the sub-list for field type_name
 }
 
-func init() { file_pb_wscache_proto_init() }
-func file_pb_wscache_proto_init() {
-	if File_pb_wscache_proto != nil {
+func init() { file_pb_wsCache_proto_init() }
+func file_pb_wsCache_proto_init() {
+	if File_pb_wsCache_proto != nil {
 		return
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
-			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pb_wscache_proto_rawDesc), len(file_pb_wscache_proto_rawDesc)),
+			RawDescriptor: unsafe.Slice(unsafe.StringData(file_pb_wsCache_proto_rawDesc), len(file_pb_wsCache_proto_rawDesc)),
 			NumEnums:      0,
 			NumMessages:   3,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
-		GoTypes:           file_pb_wscache_proto_goTypes,
-		DependencyIndexes: file_pb_wscache_proto_depIdxs,
-		MessageInfos:      file_pb_wscache_proto_msgTypes,
+		GoTypes:           file_pb_wsCache_proto_goTypes,
+		DependencyIndexes: file_pb_wsCache_proto_depIdxs,
+		MessageInfos:      file_pb_wsCache_proto_msgTypes,
 	}.Build()
-	File_pb_wscache_proto = out.File
-	file_pb_wscache_proto_goTypes = nil
-	file_pb_wscache_proto_depIdxs = nil
+	File_pb_wsCache_proto = out.File
+	file_pb_wsCache_proto_goTypes = nil
+	file_pb_wsCache_proto_depIdxs = nil
 }

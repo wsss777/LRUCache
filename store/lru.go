@@ -74,6 +74,28 @@ func (c *lruCache) Get(key string) (Value, bool) {
 
 }
 
+func (c *lruCache) GetEntry(key string) (Value, time.Time, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	elem, ok := c.items[key]
+	if !ok {
+		return nil, time.Time{}, false
+	}
+
+	if expTime, hasExp := c.expires[key]; hasExp {
+		if time.Now().After(expTime) {
+			c.removeElement(elem)
+			return nil, time.Time{}, false
+		}
+		c.list.MoveToFront(elem)
+		return elem.Value.(*lruEntry).value, expTime, true
+	}
+
+	c.list.MoveToFront(elem)
+	return elem.Value.(*lruEntry).value, time.Time{}, true
+}
+
 // Set  添加或更新缓存项
 func (c *lruCache) Set(key string, value Value) error {
 	return c.SetWithExpiration(key, value, 0)
@@ -121,6 +143,23 @@ func (c *lruCache) Delete(key string) bool {
 		return true
 	}
 	return false
+}
+
+func (c *lruCache) Walk(fn WalkFunc) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	now := time.Now()
+	for elem := c.list.Front(); elem != nil; elem = elem.Next() {
+		entry := elem.Value.(*lruEntry)
+		expireAt, hasExp := c.expires[entry.key]
+		if hasExp && !expireAt.After(now) {
+			continue
+		}
+		if !fn(entry.key, entry.value, expireAt) {
+			return
+		}
+	}
 }
 
 // Clear 清空缓存
@@ -174,7 +213,7 @@ func (c *lruCache) evict() {
 	for c.maxBytes > 0 && c.usedBytes > c.maxBytes && c.list.Len() > 0 {
 		elem := c.list.Back()
 		if elem != nil {
-			c.removeElement(c.list.Front())
+			c.removeElement(elem)
 		}
 	}
 }

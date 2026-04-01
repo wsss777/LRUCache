@@ -6,11 +6,15 @@ type Value interface {
 	Len() int
 }
 
+type WalkFunc func(key string, value Value, expireAt time.Time) bool
+
 type Store interface {
 	Get(key string) (Value, bool)
+	GetEntry(key string) (Value, time.Time, bool)
 	Set(key string, value Value) error
 	SetWithExpiration(key string, value Value, expiration time.Duration) error
 	Delete(key string) bool
+	Walk(fn WalkFunc)
 	Clear()
 	Len() int
 	Close()

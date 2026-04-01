@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/wsss777/LRUCache/cache"
+	"github.com/wsss777/LRUCache/cluster"
 	"github.com/wsss777/LRUCache/logger"
 	pb "github.com/wsss777/LRUCache/pb"
 	"github.com/wsss777/LRUCache/registry"
@@ -125,9 +126,8 @@ func (s *Server) Start() error {
 		return fmt.Errorf("Failed to listen: %v", err)
 	}
 	// 注册到etcd
-	stopCh := make(chan error)
 	go func() {
-		if err := registry.Register(s.svcName, s.addr, stopCh); err != nil {
+		if err := registry.Register(s.svcName, s.addr, s.stopCh); err != nil {
 			logger.L().Error("failed to register service",
 				zap.String("addr", s.addr),
 				zap.Error(err))
@@ -155,6 +155,19 @@ func (s *Server) Get(ctx context.Context, req *pb.Request) (*pb.ResponseForGet, 
 		return nil, fmt.Errorf("group %s not found", req.Group)
 
 	}
+	if cluster.IsLocalOnlyRequest(ctx) {
+		view, expireAt, ok := group.GetLocalEntry(req.Key)
+		if !ok {
+			return nil, fmt.Errorf("key %s not found locally", req.Key)
+		}
+		resp := &pb.ResponseForGet{
+			Value: view.ByteSlice(),
+		}
+		if !expireAt.IsZero() {
+			resp.ExpireAtUnixNano = expireAt.UnixNano()
+		}
+		return resp, nil
+	}
 	view, err := group.Get(ctx, req.Key)
 	if err != nil {
 		return nil, err
@@ -177,11 +190,21 @@ func (s *Server) Set(ctx context.Context, req *pb.Request) (*pb.ResponseForGet, 
 	// 	ctx = context.WithValue(ctx, "from_peer", true)
 	// }
 
-	if err := group.Set(ctx, req.Key, req.Value); err != nil {
+	var err error
+	if req.GetExpireAtUnixNano() > 0 {
+		err = group.SetWithExpireAt(ctx, req.Key, req.Value, time.Unix(0, req.GetExpireAtUnixNano()))
+	} else {
+		err = group.Set(ctx, req.Key, req.Value)
+	}
+	if err != nil {
 		return nil, err
 	}
 
-	return &pb.ResponseForGet{Value: req.Value}, nil
+	resp := &pb.ResponseForGet{Value: req.Value}
+	if req.GetExpireAtUnixNano() > 0 {
+		resp.ExpireAtUnixNano = req.GetExpireAtUnixNano()
+	}
+	return resp, nil
 }
 
 // Delete 实现Cache服务的Delete方法

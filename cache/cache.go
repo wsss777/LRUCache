@@ -151,6 +151,14 @@ func (c *Cache) AddWithExpiration(key string, value ByteView, expirationTime tim
 	}
 }
 
+func (c *Cache) AddWithExpireAt(key string, value ByteView, expireAt time.Time) {
+	if expireAt.IsZero() {
+		c.Add(key, value)
+		return
+	}
+	c.AddWithExpiration(key, value, expireAt)
+}
+
 // Delete 从缓存中删除一个 key
 func (c *Cache) Delete(key string) bool {
 	if atomic.LoadInt32(&c.closed) == 1 || atomic.LoadInt32(&c.initialized) == 0 {
@@ -159,6 +167,47 @@ func (c *Cache) Delete(key string) bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	return c.store.Delete(key)
+}
+
+func (c *Cache) GetEntry(key string) (ByteView, time.Time, bool) {
+	if atomic.LoadInt32(&c.closed) == 1 || atomic.LoadInt32(&c.initialized) == 0 {
+		return ByteView{}, time.Time{}, false
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	val, expireAt, found := c.store.GetEntry(key)
+	if !found {
+		return ByteView{}, time.Time{}, false
+	}
+
+	bv, ok := val.(ByteView)
+	if !ok {
+		logger.L().Warn("type assertion failed , expected ByteView",
+			zap.String("key", key))
+		return ByteView{}, time.Time{}, false
+	}
+	return bv, expireAt, true
+}
+
+func (c *Cache) Walk(fn func(key string, value ByteView, expireAt time.Time) bool) {
+	if atomic.LoadInt32(&c.closed) == 1 || atomic.LoadInt32(&c.initialized) == 0 {
+		return
+	}
+
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	c.store.Walk(func(key string, value store.Value, expireAt time.Time) bool {
+		bv, ok := value.(ByteView)
+		if !ok {
+			logger.L().Warn("type assertion failed during walk",
+				zap.String("key", key))
+			return true
+		}
+		return fn(key, bv, expireAt)
+	})
 }
 
 // Clear 清空缓存
